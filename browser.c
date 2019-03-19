@@ -1096,6 +1096,15 @@ void _mutt_buffer_select_file (BUFFER *f, int flags, char ***files, int *numfile
           {
 	    if (!imap_delete_mailbox (Context, mx))
             {
+              /* Some IMAP servers react badly to the currently selected mailbox
+               * being deleted, so close in that case */
+              if (Context &&
+                  !mutt_strcmp (state.entry[nentry].name, Context->realpath))
+              {
+                Context->deleted = 0;
+                mx_fastclose_mailbox (Context);
+                FREE (&Context);
+              }
 	      /* free the mailbox from the browser */
 	      FREE (&((state.entry)[nentry].name));
 	      FREE (&((state.entry)[nentry].desc));
