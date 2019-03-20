@@ -150,7 +150,7 @@ int imap_rename_mailbox (IMAP_DATA* idata, IMAP_MBOX* mx, const char* newname)
   return rc;
 }
 
-int imap_delete_mailbox (CONTEXT* ctx, IMAP_MBOX mx)
+int imap_delete_mailbox (CONTEXT* ctx, IMAP_MBOX mx, int close_context)
 {
   char buf[LONG_STRING*2], mbox[LONG_STRING];
   IMAP_DATA *idata;
@@ -174,6 +174,18 @@ int imap_delete_mailbox (CONTEXT* ctx, IMAP_MBOX mx)
 
   if (imap_exec ((IMAP_DATA*) idata, buf, 0) != 0)
     return -1;
+
+  /* Some IMAP servers react badly to the currently selected mailbox
+   * being deleted, so issue a CLOSE.  imap_close_mailbox() queue's
+   * the CLOSE command instead of sending it right away, so we issue
+   * the command ourself here. */
+  if (close_context)
+  {
+    imap_exec (idata, "CLOSE", 0);
+    idata->state = IMAP_AUTHENTICATED;
+    mx_fastclose_mailbox (Context);
+    FREE (&Context);
+  }
 
   return 0;
 }
