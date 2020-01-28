@@ -27,8 +27,8 @@ BUILT_SOURCES = keymap_defs.h patchlist.c reldate.h conststrings.c version.h $(H
 
 bin_PROGRAMS = mutt $(DOTLOCK_TARGET) $(PGPAUX_TARGET)
 mutt_SOURCES = \
-	addrbook.c alias.c attach.c base64.c browser.c buffer.c buffy.c color.c \
-	crypt.c cryptglue.c \
+	addrbook.c alias.c attach.c background.c base64.c browser.c buffer.c \
+	buffy.c color.c crypt.c cryptglue.c \
 	commands.c complete.c compose.c copy.c curs_lib.c curs_main.c date.c \
 	edit.c enter.c flags.c init.c filter.c from.c \
 	getdomain.c group.c \

@@ -43,6 +43,7 @@ void mutt_free_opts (void);
 
 #define mutt_system(x) _mutt_system(x,0)
 int _mutt_system (const char *, int);
+pid_t mutt_background_run (const char *cmd);
 
 #define mutt_next_thread(x) _mutt_aside_thread(x,1,0)
 #define mutt_previous_thread(x) _mutt_aside_thread(x,0,0)
