@@ -2239,7 +2239,7 @@ int mutt_index_menu (void)
       case OP_MAIL:
 
 	CHECK_ATTACH;
-	mutt_send_message (0, NULL, NULL, Context, NULL);
+	mutt_send_message (SENDBACKGROUNDEDIT, NULL, NULL, Context, NULL);
 	menu->redraw = REDRAW_FULL;
 	break;
 

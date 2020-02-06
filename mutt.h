@@ -358,6 +358,7 @@ enum
 #define SENDDRAFTFILE		(1<<11)   /* Used by the -H flag */
 #define SENDTOSENDER            (1<<12)
 #define SENDGROUPCHATREPLY      (1<<13)
+#define SENDBACKGROUNDEDIT      (1<<14)  /* Allow background editing */
 
 /* flags to _mutt_select_file() */
 #define MUTT_SEL_BUFFY  (1<<0)
@@ -386,6 +387,7 @@ enum
   OPTAUTOSUBSCRIBE,
   OPTAUTOTAG,
   OPTBEEP,
+  OPTBACKGROUNDEDIT,
   OPTBEEPNEW,
   OPTBOUNCEDELIVERED,
   OPTCHANGEFOLDERNEXT,

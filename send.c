@@ -1647,6 +1647,11 @@ static void send_ctx_free (SEND_CONTEXT **psctx)
   FREE (psctx);    /* __FREE_CHECKED__ */
 }
 
+/* Pre-initial edit message setup.
+ *
+ * Returns 0 if this part of the process finished normally
+ *        -1 if an error occured or the process was aborted
+ */
 static int send_message_setup (SEND_CONTEXT *sctx, const char *tempfile,
                                CONTEXT *ctx)
 {
@@ -1901,6 +1906,12 @@ cleanup:
   return rv;
 }
 
+/* Initial pre-compose menu edit, and actions before the compose menu.
+ *
+ * Returns 0 if this part of the process finished normally
+ *        -1 if an error occured or the process was aborted
+ *         2 if the initial edit was backgrounded
+ */
 static int send_message_resume_first_edit (SEND_CONTEXT *sctx)
 {
   int rv = -1;
@@ -2126,6 +2137,13 @@ cleanup:
   return rv;
 }
 
+/* Compose menu and post-compose menu sending
+ *
+ * Returns 0 if the message was successfully sent
+ *        -1 if the message was aborted or an error occurred
+ *         1 if the message was postponed
+ *         2 if the message editing was backgrounded
+ */
 static int send_message_resume_compose_menu (SEND_CONTEXT *sctx)
 {
   int rv = -1, i;
@@ -2339,10 +2357,8 @@ main_loop:
 
   /* TODO: this needs to be fixed up to use sctx values,
    * compare the context realpath.  open if the mailbox has
-   * changed.
-   *
-   * Perhaps we can store cur in sctx but NULL it out if the
-   * editing is backgrounded. */
+   * changed?
+   */
   if (sctx->flags & SENDREPLY)
   {
     if (sctx->ctx_realpath && Context &&
@@ -2370,22 +2386,34 @@ cleanup:
 /* backgroundable and resumable part of the send process.
  *
  * need to define a "backgrounded" return value.
+ *
+ * Returns 0 if the message was successfully sent
+ *        -1 if the message was aborted or an error occurred
+ *         1 if the message was postponed
+ *         2 if the message editing was backgrounded
  */
 int mutt_send_message_resume (SEND_CONTEXT *sctx)
 {
-  int rv = -1;
+  int rv;
 
+  /* TODO: check sctx state and possibly skip */
   rv = send_message_resume_first_edit (sctx);
-  if (rv < 0)
+  if (rv != 0)
     goto cleanup;
 
   rv = send_message_resume_compose_menu (sctx);
-  if (rv < 0)
-    goto cleanup;
-
-  rv = 0;
 
 cleanup:
+  if (rv != 2)
+    send_ctx_free (&sctx);
+  else
+  {
+    /* stuff into background edit list */
+
+    /* TODO: until we code up the background list menu, we can support
+     * a single backgrounded via a global, just to make testing easier */
+  }
+
   return rv;
 }
 
@@ -2393,6 +2421,7 @@ cleanup:
  * Returns 0 if the message was successfully sent
  *        -1 if the message was aborted or an error occurred
  *         1 if the message was postponed
+ *         2 if the message editing was backgrounded
  */
 int
 mutt_send_message (int flags,            /* send mode */
@@ -2403,53 +2432,52 @@ mutt_send_message (int flags,            /* send mode */
 {
   SEND_CONTEXT *sctx;
   int rv = -1;
-  int resume_rc;
 
   sctx = send_ctx_new ();
   sctx->flags = flags;
   sctx->msg = msg;
   sctx->cur = cur;
+  /* TODO:
+   * grab cur fields here? see TODO below.
+   */
   if (ctx)
     sctx->ctx_realpath = safe_strdup (ctx->realpath);
 
   /* NOTE:
-   * if msg is passed in, this function is *supposed* to free it
-   * unless flag SENDNOFREEHEADER is set.
-   * That is only done by main.  And for that case we want
-   * to make sure NO_BACKGROUND is set.
-   */
-
-  /* TODO:
-   * cur can't be stored in sctx for a backgroundable.
-   * see if we can store just the components of cur we need
-   * and regrab the actual header when persisting replied flag.
-   */
-
-  /* NOTE:
-   * we still need to check other callers to make sure the components
-   * of the msg header don't disappear after returning!!!
+   * we still need to check other callers as we allow them, to make
+   * sure the components of the msg header don't disappear after
+   * returning!!!
    */
 
   if (send_message_setup (sctx, tempfile, ctx) < 0)
-    goto cleanup;
+  {
+    send_ctx_free (&sctx);
+    return -1;
+  }
 
+  /* TODO:
+   * cur can't be stored in sctx for a backgroundable.
+   * so if background flag is set, grab and store needed fields in sctx.
+   *
+   * Ideally we would do this here.  However, postponed message may
+   * be resumed in another mailbox, preventing the cur from being used
+   * outside the context of open/closing the context.
+   *
+   * Perhaps instead we need to do so above *and* in postpone/resume via a
+   * function.
+   */
 
-  resume_rc = mutt_send_message_resume (sctx);
-  if (resume_rc < 0)
-    goto cleanup;
-
-  /* TODO: if rc is backgroundable, stuff in background list and pass along
-   * backgrounded rc value.  Should this be
-   * done inside mutt_send_message_resume so we don't have the logic
-   * everywhere? */
-
-  /* TODO: until we code up the background list menu, we can support
-   * a single backgrounded via a global, just to make testing easier */
-
-  rv = 0;
-
-cleanup:
-  send_ctx_free (&sctx);
+  /* Note: mutt_send_message_resume() takes care of freeing
+   * the sctx if appropriate, and also adds to the background edit
+   * list.
+   */
+  rv = mutt_send_message_resume (sctx);
+  if (rv == 2)
+  {
+    /* TODO:
+     * NULL out cur if message is backgrounded.
+     */
+  }
 
   return rv;
 }
