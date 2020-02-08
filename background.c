@@ -23,6 +23,7 @@
 
 #include "mutt.h"
 #include "send.h"
+#include "background.h"
 
 #include <stdlib.h>
 #include <signal.h>
@@ -30,7 +31,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-pid_t mutt_background_run (const char *cmd)
+
+static pid_t mutt_background_run (const char *cmd)
 {
   struct sigaction act;
   pid_t thepid;
@@ -80,16 +82,30 @@ pid_t mutt_background_run (const char *cmd)
   return (thepid);
 }
 
-pid_t mutt_background_edit_file (const char *editor, const char *filename)
+int mutt_background_edit_file (SEND_CONTEXT *sctx, const char *editor,
+                               const char *filename)
 {
   BUFFER *cmd;
   pid_t pid;
+  int rc = -1;
 
   cmd = mutt_buffer_pool_get ();
 
   mutt_expand_file_fmt (cmd, editor, filename);
   pid = mutt_background_run (mutt_b2s (cmd));
-  mutt_buffer_pool_release (&cmd);
+  if (pid <= 0)
+  {
+    mutt_error (_("Error running \"%s\"!"), mutt_b2s (cmd));
+    mutt_sleep (2);
+    goto cleanup;
+  }
 
-  return pid;
+  sctx->background_pid = pid;
+  BackgroundProcess = sctx;
+
+  rc = 0;
+
+cleanup:
+  mutt_buffer_pool_release (&cmd);
+  return rc;
 }

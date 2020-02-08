@@ -33,6 +33,7 @@
 #include "rfc3676.h"
 #include "attach.h"
 #include "send.h"
+#include "background.h"
 
 #ifdef USE_AUTOCRYPT
 #include "autocrypt.h"
@@ -1925,60 +1926,97 @@ static int send_message_resume_first_edit (SEND_CONTEXT *sctx)
   else if (! (sctx->flags & SENDBATCH))
   {
     struct stat st;
-    time_t mtime = mutt_decrease_mtime (sctx->msg->content->filename, NULL);
 
-    mutt_update_encoding (sctx->msg->content);
-
-    /*
-     * Select whether or not the user's editor should be called now.  We
-     * don't want to do this when:
-     * 1) we are sending a key/cert
-     * 2) we are forwarding a message and the user doesn't want to edit it.
-     *    This is controlled by the quadoption $forward_edit.  However, if
-     *    both $edit_headers and $autoedit are set, we want to ignore the
-     *    setting of $forward_edit because the user probably needs to add the
-     *    recipients.
-     */
-    if (! (sctx->flags & SENDKEY) &&
-	((sctx->flags & SENDFORWARD) == 0 ||
-	 (option (OPTEDITHDRS) && option (OPTAUTOEDIT)) ||
-	 query_quadoption (OPT_FORWEDIT, _("Edit forwarded message?")) == MUTT_YES))
+    /* Resume background editing */
+    if (sctx->state)
     {
-      /* If the this isn't a text message, look for a mailcap edit command */
-      if (mutt_needs_mailcap (sctx->msg->content))
+      if (sctx->state == SEND_STATE_FIRST_EDIT)
       {
-	if (!mutt_edit_attachment (sctx->msg->content))
-          goto cleanup;
+        if (stat (sctx->msg->content->filename, &st) == 0)
+        {
+          if (sctx->mtime != st.st_mtime)
+            fix_end_of_file (sctx->msg->content->filename);
+        }
+        else
+          mutt_perror (sctx->msg->content->filename);
       }
-      else if (!Editor || mutt_strcmp ("builtin", Editor) == 0)
-	mutt_builtin_editor (sctx);
-      else if (option (OPTEDITHDRS))
-      {
-	mutt_env_to_local (sctx->msg->env);
-	mutt_edit_headers (Editor, sctx);
-	mutt_env_to_intl (sctx->msg->env, NULL, NULL);
-      }
-      else
-      {
-	mutt_edit_file (Editor, sctx->msg->content->filename);
-	if (stat (sctx->msg->content->filename, &st) == 0)
-	{
-	  if (mtime != st.st_mtime)
-	    fix_end_of_file (sctx->msg->content->filename);
-	}
-	else
-	  mutt_perror (sctx->msg->content->filename);
-      }
-
-      mutt_message_hook (NULL, sctx->msg, MUTT_SEND2HOOK);
+      sctx->state = 0;
     }
+    else
+    {
+      sctx->mtime = mutt_decrease_mtime (sctx->msg->content->filename, NULL);
+      mutt_update_encoding (sctx->msg->content);
+
+      /*
+       * Select whether or not the user's editor should be called now.  We
+       * don't want to do this when:
+       * 1) we are sending a key/cert
+       * 2) we are forwarding a message and the user doesn't want to edit it.
+       *    This is controlled by the quadoption $forward_edit.  However, if
+       *    both $edit_headers and $autoedit are set, we want to ignore the
+       *    setting of $forward_edit because the user probably needs to add the
+       *    recipients.
+       */
+      if (! (sctx->flags & SENDKEY) &&
+          ((sctx->flags & SENDFORWARD) == 0 ||
+           (option (OPTEDITHDRS) && option (OPTAUTOEDIT)) ||
+           query_quadoption (OPT_FORWEDIT, _("Edit forwarded message?")) == MUTT_YES))
+      {
+        int background_edit;
+
+        background_edit = (sctx->flags & SENDBACKGROUNDEDIT) &&
+          option (OPTBACKGROUNDEDIT);
+
+        /* If the this isn't a text message, look for a mailcap edit command */
+        if (mutt_needs_mailcap (sctx->msg->content))
+        {
+          if (!mutt_edit_attachment (sctx->msg->content))
+            goto cleanup;
+        }
+        else if (!Editor || mutt_strcmp ("builtin", Editor) == 0)
+          mutt_builtin_editor (sctx);
+        else if (option (OPTEDITHDRS))
+        {
+          mutt_env_to_local (sctx->msg->env);
+          /*** *************** ***/
+          mutt_edit_headers (Editor, sctx);
+          /*** *************** ***/
+          mutt_env_to_intl (sctx->msg->env, NULL, NULL);
+        }
+        else
+        {
+          if (background_edit)
+          {
+            if (mutt_background_edit_file (sctx, Editor,
+                                           sctx->msg->content->filename) == 0)
+            {
+              sctx->state = SEND_STATE_FIRST_EDIT;
+              return 2;
+            }
+          }
+          else
+          {
+            mutt_edit_file (Editor, sctx->msg->content->filename);
+            if (stat (sctx->msg->content->filename, &st) == 0)
+            {
+              if (sctx->mtime != st.st_mtime)
+                fix_end_of_file (sctx->msg->content->filename);
+            }
+            else
+              mutt_perror (sctx->msg->content->filename);
+          }
+        }
+      }
+    }
+
+    mutt_message_hook (NULL, sctx->msg, MUTT_SEND2HOOK);
 
     if (! (sctx->flags & (SENDPOSTPONED | SENDFORWARD | SENDKEY | SENDRESEND | SENDDRAFTFILE)))
     {
       if (stat (sctx->msg->content->filename, &st) == 0)
       {
 	/* if the file was not modified, bail out now */
-	if (mtime == st.st_mtime && !sctx->msg->content->next &&
+	if (sctx->mtime == st.st_mtime && !sctx->msg->content->next &&
 	    query_quadoption (OPT_ABORT, _("Abort unmodified message?")) == MUTT_YES)
 	{
 	  mutt_message _("Aborted unmodified message.");
@@ -2406,13 +2444,6 @@ int mutt_send_message_resume (SEND_CONTEXT *sctx)
 cleanup:
   if (rv != 2)
     send_ctx_free (&sctx);
-  else
-  {
-    /* stuff into background edit list */
-
-    /* TODO: until we code up the background list menu, we can support
-     * a single backgrounded via a global, just to make testing easier */
-  }
 
   return rv;
 }

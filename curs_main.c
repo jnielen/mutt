@@ -29,6 +29,7 @@
 #include "buffy.h"
 #include "mx.h"
 #include "send.h"
+#include "background.h"
 
 #ifdef USE_SIDEBAR
 #include "sidebar.h"
@@ -2239,7 +2240,21 @@ int mutt_index_menu (void)
       case OP_MAIL:
 
 	CHECK_ATTACH;
-	mutt_send_message (SENDBACKGROUNDEDIT, NULL, NULL, Context, NULL);
+        if (BackgroundProcess)
+        {
+          SEND_CONTEXT *sctx = BackgroundProcess;
+          BackgroundProcess = NULL;
+          /* this is a quick hack for now */
+          waitpid (sctx->background_pid, NULL, 0);
+          mutt_send_message_resume (sctx);
+        }
+        else
+        {
+          int rv;
+          rv = mutt_send_message (SENDBACKGROUNDEDIT, NULL, NULL, Context, NULL);
+          if (rv == 2)
+            mutt_message ("Editing backgrounded.  Hit m to restart");
+        }
 	menu->redraw = REDRAW_FULL;
 	break;
 

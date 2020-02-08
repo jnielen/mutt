@@ -1125,6 +1125,7 @@ int mutt_compose_menu (SEND_CONTEXT *sctx)
 	if (Editor && (mutt_strcmp ("builtin", Editor) != 0) && !option (OPTEDITHDRS))
 	{
           mutt_rfc3676_space_unstuff (msg);
+          /*** ************* ***/
 	  mutt_edit_file (Editor, msg->content->filename);
           mutt_rfc3676_space_stuff (msg);
 	  mutt_update_encoding (msg->content);
@@ -1142,6 +1143,7 @@ int mutt_compose_menu (SEND_CONTEXT *sctx)
 	{
 	  char *tag = NULL, *err = NULL;
 	  mutt_env_to_local (msg->env);
+          /*** ************* ***/
 	  mutt_edit_headers (NONULL (Editor), sctx);
 	  if (mutt_env_to_intl (msg->env, &tag, &err))
 	  {

@@ -19,21 +19,32 @@
 #ifndef _SEND_H
 #define _SEND_H 1
 
+enum
+{
+  SEND_STATE_FIRST_EDIT = 1
+};
+
 typedef struct send_ctx
 {
   int flags;
   int state;
 
   HEADER *msg;
+  BUFFER *fcc;
+  time_t mtime;
 
   /* Note: cur can't be stored in the send_context when
    * background editing is added.  This is here for now
    * just to ease refactoring.
    */
   HEADER *cur;
-  BUFFER *fcc;
-
+  unsigned int cur_security;
+  char *cur_message_id;
   char *ctx_realpath;
+
+
+  pid_t background_pid;
+
 
   char *pgp_sign_as;
   char *smime_sign_as;
