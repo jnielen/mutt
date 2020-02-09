@@ -1639,6 +1639,9 @@ static void send_ctx_free (SEND_CONTEXT **psctx)
   if (!(sctx->flags & SENDNOFREEHEADER))
     mutt_free_header (&sctx->msg);
   mutt_buffer_free (&sctx->fcc);
+  mutt_buffer_free (&sctx->tempfile);
+
+  FREE (&sctx->cur_message_id);
   FREE (&sctx->ctx_realpath);
 
   FREE (&sctx->pgp_sign_as);
@@ -1940,6 +1943,11 @@ static int send_message_resume_first_edit (SEND_CONTEXT *sctx)
         else
           mutt_perror (sctx->msg->content->filename);
       }
+      else if (sctx->state == SEND_STATE_FIRST_EDIT_HEADERS)
+      {
+        mutt_edit_headers (Editor, sctx, MUTT_EDIT_HEADERS_RESUME);
+        mutt_env_to_intl (sctx->msg->env, NULL, NULL);
+      }
       sctx->state = 0;
     }
     else
@@ -1978,9 +1986,17 @@ static int send_message_resume_first_edit (SEND_CONTEXT *sctx)
         else if (option (OPTEDITHDRS))
         {
           mutt_env_to_local (sctx->msg->env);
-          /*** *************** ***/
-          mutt_edit_headers (Editor, sctx);
-          /*** *************** ***/
+          if (background_edit)
+          {
+            if (mutt_edit_headers (Editor, sctx, MUTT_EDIT_HEADERS_BACKGROUND) == 2)
+            {
+              sctx->state = SEND_STATE_FIRST_EDIT_HEADERS;
+              return 2;
+            }
+          }
+          else
+            mutt_edit_headers (Editor, sctx, 0);
+
           mutt_env_to_intl (sctx->msg->env, NULL, NULL);
         }
         else
@@ -1995,16 +2011,15 @@ static int send_message_resume_first_edit (SEND_CONTEXT *sctx)
             }
           }
           else
-          {
             mutt_edit_file (Editor, sctx->msg->content->filename);
-            if (stat (sctx->msg->content->filename, &st) == 0)
-            {
-              if (sctx->mtime != st.st_mtime)
-                fix_end_of_file (sctx->msg->content->filename);
-            }
-            else
-              mutt_perror (sctx->msg->content->filename);
+
+          if (stat (sctx->msg->content->filename, &st) == 0)
+          {
+            if (sctx->mtime != st.st_mtime)
+              fix_end_of_file (sctx->msg->content->filename);
           }
+          else
+            mutt_perror (sctx->msg->content->filename);
         }
       }
     }

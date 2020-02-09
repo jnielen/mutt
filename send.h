@@ -21,7 +21,8 @@
 
 enum
 {
-  SEND_STATE_FIRST_EDIT = 1
+  SEND_STATE_FIRST_EDIT = 1,
+  SEND_STATE_FIRST_EDIT_HEADERS
 };
 
 typedef struct send_ctx
@@ -31,7 +32,9 @@ typedef struct send_ctx
 
   HEADER *msg;
   BUFFER *fcc;
+  BUFFER *tempfile;
   time_t mtime;
+  time_t tempfile_mtime;
 
   /* Note: cur can't be stored in the send_context when
    * background editing is added.  This is here for now
@@ -42,9 +45,7 @@ typedef struct send_ctx
   char *cur_message_id;
   char *ctx_realpath;
 
-
   pid_t background_pid;
-
 
   char *pgp_sign_as;
   char *smime_sign_as;

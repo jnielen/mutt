@@ -1144,7 +1144,7 @@ int mutt_compose_menu (SEND_CONTEXT *sctx)
 	  char *tag = NULL, *err = NULL;
 	  mutt_env_to_local (msg->env);
           /*** ************* ***/
-	  mutt_edit_headers (NONULL (Editor), sctx);
+	  mutt_edit_headers (NONULL (Editor), sctx, 0);
 	  if (mutt_env_to_intl (msg->env, &tag, &err))
 	  {
 	    mutt_error (_("Bad IDN in \"%s\": '%s'"), tag, err);

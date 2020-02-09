@@ -360,6 +360,10 @@ enum
 #define SENDGROUPCHATREPLY      (1<<13)
 #define SENDBACKGROUNDEDIT      (1<<14)  /* Allow background editing */
 
+/* flags for mutt_edit_headers() */
+#define MUTT_EDIT_HEADERS_BACKGROUND  1
+#define MUTT_EDIT_HEADERS_RESUME      2
+
 /* flags to _mutt_select_file() */
 #define MUTT_SEL_BUFFY  (1<<0)
 #define MUTT_SEL_MULTI  (1<<1)
