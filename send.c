@@ -2225,6 +2225,11 @@ main_loop:
       rv = 1;
       goto cleanup;
     }
+    else if (i == 2)
+    {
+      rv = 2;
+      goto cleanup;
+    }
   }
 
   if (!has_recips (sctx->msg->env->to) && !has_recips (sctx->msg->env->cc) &&
@@ -2449,10 +2454,12 @@ int mutt_send_message_resume (SEND_CONTEXT *sctx)
 {
   int rv;
 
-  /* TODO: check sctx state and possibly skip */
-  rv = send_message_resume_first_edit (sctx);
-  if (rv != 0)
-    goto cleanup;
+  if (sctx->state <= SEND_STATE_FIRST_EDIT_HEADERS)
+  {
+    rv = send_message_resume_first_edit (sctx);
+    if (rv != 0)
+      goto cleanup;
+  }
 
   rv = send_message_resume_compose_menu (sctx);
 

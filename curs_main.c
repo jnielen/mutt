@@ -2246,13 +2246,13 @@ int mutt_index_menu (void)
           BackgroundProcess = NULL;
           /* this is a quick hack for now */
           waitpid (sctx->background_pid, NULL, 0);
-          mutt_send_message_resume (sctx);
+          if (mutt_send_message_resume (sctx) == 2)
+            mutt_message ("Editing backgrounded.  Hit m to restart");
         }
         else
         {
-          int rv;
-          rv = mutt_send_message (SENDBACKGROUNDEDIT, NULL, NULL, Context, NULL);
-          if (rv == 2)
+          if (mutt_send_message (SENDBACKGROUNDEDIT, NULL, NULL,
+                                 Context, NULL) == 2)
             mutt_message ("Editing backgrounded.  Hit m to restart");
         }
 	menu->redraw = REDRAW_FULL;
