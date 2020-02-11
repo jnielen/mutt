@@ -1077,19 +1077,28 @@ int imap_exec_msgset (IMAP_DATA* idata, const char* pre, const char* post,
 
   cmd = mutt_buffer_new ();
 
-  /* We make a copy of the headers just in case resorting doesn't give
-     exactly the original order (duplicate messages?), because other parts of
-     the ctx are tied to the header order. This may be overkill. */
+  /* Unlike imap_sync_mailbox(), this function can be called when
+   * IMAP_REOPEN_ALLOW is not set.  In that case, the caller isn't
+   * prepared to handle context changes.  Resorting may not always
+   * give the same order, so in that case we make a copy.
+   *
+   * But if IMAP_REOPEN_ALLOW is set, we can't make a copy because
+   * new messages or expunges can be processed.
+   */
   oldsort = Sort;
   if (Sort != SORT_ORDER)
   {
-    hdrs = idata->ctx->hdrs;
-    idata->ctx->hdrs = safe_malloc (idata->ctx->msgcount * sizeof (HEADER*));
-    memcpy (idata->ctx->hdrs, hdrs, idata->ctx->msgcount * sizeof (HEADER*));
-
     Sort = SORT_ORDER;
-    qsort (idata->ctx->hdrs, idata->ctx->msgcount, sizeof (HEADER*),
-           mutt_get_sort_func (SORT_ORDER));
+    if (idata->reopen & IMAP_REOPEN_ALLOW)
+      mutt_sort_headers (idata->ctx, 0);
+    else
+    {
+      hdrs = idata->ctx->hdrs;
+      idata->ctx->hdrs = safe_malloc (idata->ctx->msgcount * sizeof (HEADER*));
+      memcpy (idata->ctx->hdrs, hdrs, idata->ctx->msgcount * sizeof (HEADER*));
+      qsort (idata->ctx->hdrs, idata->ctx->msgcount, sizeof (HEADER*),
+             mutt_get_sort_func (SORT_ORDER));
+    }
   }
 
   pos = 0;
@@ -1116,11 +1125,16 @@ int imap_exec_msgset (IMAP_DATA* idata, const char* pre, const char* post,
 
 out:
   mutt_buffer_free (&cmd);
-  if (oldsort != Sort)
+  if ((oldsort != Sort) || hdrs)
   {
     Sort = oldsort;
-    FREE (&idata->ctx->hdrs);
-    idata->ctx->hdrs = hdrs;
+    if (!hdrs)
+      mutt_sort_headers (idata->ctx, 0);
+    else
+    {
+      FREE (&idata->ctx->hdrs);
+      idata->ctx->hdrs = hdrs;
+    }
   }
 
   return rc;
@@ -1262,7 +1276,6 @@ int imap_sync_mailbox (CONTEXT* ctx, int expunge, int* index_hint)
   IMAP_DATA* idata;
   CONTEXT* appendctx = NULL;
   HEADER* h;
-  HEADER** hdrs = NULL;
   int oldsort;
   int n;
   int rc;
@@ -1378,17 +1391,20 @@ int imap_sync_mailbox (CONTEXT* ctx, int expunge, int* index_hint)
   imap_hcache_close (idata);
 #endif
 
-  /* presort here to avoid doing 10 resorts in imap_exec_msgset */
+  /* presort here to avoid doing 10 resorts in imap_exec_msgset.
+   * Note that IMAP_REOPEN_ALLOW is set for imap_sync, so the caller
+   * is prepared to handle context changes.
+   *
+   * Also note that sync_helper() may trigger an imap_exec() if the
+   * queue fills up, which may result in new messages being downloaded
+   * or an expunge being processed.  So making a copy of the headers
+   * is incorrect and can even result in a segv.
+   */
   oldsort = Sort;
   if (Sort != SORT_ORDER)
   {
-    hdrs = ctx->hdrs;
-    ctx->hdrs = safe_malloc (ctx->msgcount * sizeof (HEADER*));
-    memcpy (ctx->hdrs, hdrs, ctx->msgcount * sizeof (HEADER*));
-
     Sort = SORT_ORDER;
-    qsort (ctx->hdrs, ctx->msgcount, sizeof (HEADER*),
-           mutt_get_sort_func (SORT_ORDER));
+    mutt_sort_headers (ctx, 0);
   }
 
   rc = sync_helper (idata, MUTT_ACL_DELETE, MUTT_DELETED, "\\Deleted");
@@ -1404,8 +1420,7 @@ int imap_sync_mailbox (CONTEXT* ctx, int expunge, int* index_hint)
   if (oldsort != Sort)
   {
     Sort = oldsort;
-    FREE (&ctx->hdrs);
-    ctx->hdrs = hdrs;
+    mutt_sort_headers (ctx, 0);
   }
 
   /* Flush the queued flags if any were changed in sync_helper. */
